@@ -1,3 +1,5 @@
+import prisma from "@/lib/prisma";
+import { compare } from "bcrypt";
 import type { NextAuthOptions } from "next-auth";
  
 import NextAuth from "next-auth";
@@ -15,8 +17,45 @@ export const OPTIONS: NextAuthOptions = {
         },
         password: { label: "Password", type: "password" },
       },
+      async authorize(credentials) {
+        const loginErrorMessage = "Invalid email or password";
+ 
+        //check if email already exist or not
+        const isUserExisted = await prisma.user.findUnique({
+          where: {
+            email: credentials?.username,
+          },
+        });
+ 
+        //if not throw error
+        if (!isUserExisted) {
+          throw Error(loginErrorMessage);
+        }
+ 
+        //check if password that client input is them sama with hash password from db
+        if (
+          isUserExisted &&
+          credentials?.password &&
+          (await compare(credentials.password, isUserExisted.password))
+        ) {
+          //if email and password valid continue
+          return isUserExisted;
+        }
+ 
+        //throw error if password not valid
+        throw Error(loginErrorMessage);
+      },
     }),
   ],
+  pages: {
+    signIn: "/login", //tell next auth, this is url for custom login page
+  },
+  session: {
+    strategy: "jwt", //make sure to set it to jwt
+  },
+  jwt: {
+    secret: process.env.NEXTAUTH_SECRET, //fill with your own secret from .env
+  },
 };
  
 const handler = NextAuth(OPTIONS);
